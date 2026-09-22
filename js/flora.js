@@ -1,12 +1,12 @@
 /* js/flora.js
-   El jardín: un sol hecho de flores en el centro, y anillos de flores
+   El jardín: un sol sólido y luminoso en el centro, y anillos de flores
    alrededor —como los de Saturno, pero de pétalos—. Unas pocas flores
    más grandes derivan sueltas cerca de los anillos.
 */
 (function (C) {
   'use strict';
 
-  var grupo, nucleo, halo, anillos = [], sueltas = [];
+  var grupo, sol, halo, detallesSol, anillos = [], sueltas = [];
   var reducido = C.prefiereMenosMovimiento();
 
   // Pares [pétalo-claro, pétalo-oscuro, centro-claro, centro-oscuro] por capa,
@@ -23,7 +23,8 @@
     grupo = new THREE.Group();
 
     grupo.add(crearHalo());
-    grupo.add(crearNucleo());
+    grupo.add(crearSol());
+    grupo.add(crearDetallesSol());
     for (var i = 0; i < PALETA_ANILLOS.length; i++) {
       var anillo = crearAnillo(i);
       anillos.push(anillo);
@@ -35,6 +36,59 @@
     C.escena.alActualizar(actualizar);
   }
 
+  function crearSol() {
+    var geometria = new THREE.SphereGeometry(10.5, 32, 20);
+    var material = new THREE.MeshBasicMaterial({
+      color: 0xffd36b,
+      transparent: true,
+      opacity: 0.98,
+    });
+    sol = new THREE.Mesh(geometria, material);
+    return sol;
+  }
+
+  function crearDetallesSol() {
+    detallesSol = new THREE.Group();
+    var mapa = new THREE.CanvasTexture(C.texturaResplandor('rgba(255,255,220,.95)', 'rgba(255,145,45,0)', 64));
+
+    for (var i = 0; i < 3; i++) {
+      var corona = new THREE.Mesh(
+        new THREE.TorusGeometry(10.9 + i * 0.65, 0.12 + i * 0.035, 8, 64),
+        new THREE.MeshBasicMaterial({
+          color: i === 1 ? 0xfff0a5 : 0xff9b42,
+          transparent: true,
+          opacity: 0.2 - i * 0.035,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      corona.rotation.set(0.5 + i * 0.28, i * 0.7, i * 0.45);
+      detallesSol.add(corona);
+    }
+
+    for (var j = 0; j < 7; j++) {
+      var mancha = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: mapa,
+        color: j % 2 ? 0xff9a32 : 0xffe38a,
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }));
+      var angulo = (Math.PI * 2 * j) / 7 + 0.2;
+      var radio = 10.2;
+      mancha.position.set(
+        Math.cos(angulo) * radio,
+        Math.sin(angulo * 1.7) * 5.2,
+        Math.sin(angulo) * radio
+      );
+      mancha.scale.setScalar(C.azar(0.8, 1.7));
+      detallesSol.add(mancha);
+    }
+
+    return detallesSol;
+  }
+
   function crearHalo() {
     var mapa = new THREE.CanvasTexture(C.texturaResplandor('rgba(255,236,180,.95)', 'rgba(255,140,60,0)', 256));
     var mat = new THREE.SpriteMaterial({ map: mapa, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -44,41 +98,10 @@
     return sprite;
   }
 
-  // El núcleo: un racimo esférico de florecitas muy juntas, como un sol de pétalos.
-  function crearNucleo() {
-    var n = Math.round(340 * C.factorCalidad);
-    var pos = new Float32Array(n * 3);
-    var tam = new Float32Array(n);
-    var color = new Float32Array(n * 3);
-    var tonos = [[1, 0.95, 0.7], [1, 0.82, 0.42], [1, 0.68, 0.3], [1, 0.9, 0.6]];
-
-    for (var i = 0; i < n; i++) {
-      var r = 13 * Math.cbrt(Math.random());
-      var theta = Math.random() * Math.PI * 2;
-      var phi = Math.acos(C.azar(-1, 1));
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.cos(phi) * 0.55;
-      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-      tam[i] = C.azar(5, 9);
-      var t = C.elegir(tonos);
-      color[i * 3] = t[0]; color[i * 3 + 1] = t[1]; color[i * 3 + 2] = t[2];
-    }
-
-    var geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('tam', new THREE.BufferAttribute(tam, 1));
-    geo.setAttribute('color', new THREE.BufferAttribute(color, 3));
-
-    var mapa = new THREE.CanvasTexture(C.texturaFlor('#fffbe6', '#ffb545', '#fff3c4', '#ff8a2e', 96));
-    var mat = materialParticula(mapa);
-    nucleo = new THREE.Points(geo, mat);
-    return nucleo;
-  }
-
   function crearAnillo(indice) {
     var col = PALETA_ANILLOS[indice];
     var radioBase = 26 + indice * 13.5;
-    var n = Math.round((90 + indice * 26) * C.factorCalidad);
+    var n = Math.round((420 + indice * 105) * C.factorCalidad);
 
     var pos = new Float32Array(n * 3);
     var tam = new Float32Array(n);
@@ -145,6 +168,16 @@
       grupo.rotation.y += dt * 0.018;
       var pulso = 1 + Math.sin(t * 0.7) * 0.05;
       halo.scale.set(78 * pulso, 78 * pulso, 1);
+      sol.scale.setScalar(1 + Math.sin(t * 1.3) * 0.025);
+      if (detallesSol) {
+        detallesSol.rotation.y += dt * 0.025;
+        detallesSol.rotation.x = Math.sin(t * 0.18) * 0.025;
+        detallesSol.children.forEach(function (detalle, indice) {
+          if (detalle.material && indice < 3) {
+            detalle.material.opacity = 0.14 + Math.sin(t * 0.8 + indice) * 0.04;
+          }
+        });
+      }
       anillos.forEach(function (a) { a.rotation.y += dt * a.userData.velocidad; });
     }
     sueltas.forEach(function (s) {

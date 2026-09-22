@@ -134,7 +134,9 @@ button{ font-family: inherit; }
   position: fixed; inset: 0; z-index: 1;
   display: block; width: 100%; height: 100%;
   touch-action: none;
+  cursor: grab;
 }
+#universo:active{ cursor: grabbing; }
 
 .fondo-simple{
   position: fixed; inset: 0; z-index: 1; display: none;
@@ -156,7 +158,13 @@ button{ font-family: inherit; }
     calc(env(safe-area-inset-top,0px) + 90px) max(6vw, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom,0px) + 110px) 6vw;
   pointer-events: none;
 }
-.verso-contenido{ max-width: min(40ch, 46vw); text-align: left; }
+.verso-contenido{
+  position: relative;
+  max-width: min(40ch, 46vw);
+  padding: .7rem .35rem .8rem;
+  text-align: left;
+  background: transparent;
+}
 
 .frase{
   margin: 0;
@@ -164,7 +172,10 @@ button{ font-family: inherit; }
   font-size: clamp(1.15rem, 2.5vw, 1.9rem);
   line-height: 1.4;
   color: #fff3da;
-  text-shadow: 0 0 26px rgba(255,190,120,.35), 0 2px 12px rgba(0,0,0,.55);
+  text-shadow:
+    0 0 8px rgba(0,0,0,.95),
+    0 2px 20px rgba(0,0,0,.9),
+    0 0 38px rgba(0,0,0,.58);
   opacity: 0;
   transform: translateY(10px);
   transition: opacity 1.4s ease, transform 1.4s ease;
@@ -199,6 +210,7 @@ button{ font-family: inherit; }
   transition: opacity 1s ease;
   pointer-events: none;
   animation: pulso-pista 3.6s ease-in-out infinite;
+  text-shadow: 0 1px 10px rgba(0,0,0,.95), 0 0 20px rgba(0,0,0,.75);
 }
 .hint.visible{ opacity: .62; }
 @keyframes pulso-pista{ 0%,100%{ opacity: .42; } 50%{ opacity: .72; } }
@@ -211,6 +223,7 @@ button{ font-family: inherit; }
   font-style: italic; font-size: .82rem; letter-spacing: .03em;
   color: #f0e6ff; opacity: 0;
   transition: opacity 1s ease;
+  text-shadow: 0 1px 9px rgba(0,0,0,.95), 0 0 18px rgba(0,0,0,.72);
 }
 .titulo.visible{ opacity: .68; }
 

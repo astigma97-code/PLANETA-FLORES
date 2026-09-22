@@ -1,12 +1,11 @@
 /* js/espacio.js
    El cielo: estrellas que titilan, constelaciones, el polvo de nebulosa que
-   flota alrededor del jardín y las estrellas fugaces (las que se lanzan
-   solas de a poco, y la que se lanza al tocar el cielo para pedir un deseo).
+   flota alrededor del jardín y los cometas que se lanzan al tocar el cielo.
 */
 (function (C) {
   'use strict';
 
-  var grupo, estrellas, constelaciones, nebulosa;
+  var grupo, estrellas, constelaciones, nebulosa, polvoCosmico, cuerposLejanos = [], fuegos = [], auroras = [], fondos = [], detalles = [];
   var fugaces = [];
   var raycaster, mapaDestello, texturaFugaz;
   var proximaLluvia = 0;
@@ -22,11 +21,18 @@
     grupo.add(crearEstrellas());
     grupo.add(crearConstelaciones());
     grupo.add(crearNebulosa());
+    grupo.add(crearPolvoCosmico());
+    grupo.add(crearPlanetasLejanos());
+    grupo.add(crearSupernovas());
+    grupo.add(crearFuegosArtificiales());
+    grupo.add(crearAuroras());
+    grupo.add(crearGalaxiasNebulosas());
+    grupo.add(crearDetallesCosmicos());
 
     C.escena.obtener().add(grupo);
     C.escena.alActualizar(actualizar);
 
-    proximaLluvia = C.azar(1500, 3500);
+    proximaLluvia = Infinity;
   }
 
   // -- Estrellas con titileo (shader propio: el tamaño de cada una respira) --
@@ -191,6 +197,44 @@
     return puntos;
   }
 
+  function crearPolvoCosmico() {
+    var g = new THREE.Group();
+    var capas = [
+      { cantidad: 900, color: [1, 0.28, 0.7], radio: 420, alto: 260 },
+      { cantidad: 700, color: [0.25, 0.65, 1], radio: 620, alto: 360 },
+      { cantidad: 500, color: [1, 0.62, 0.22], radio: 820, alto: 440 },
+    ];
+    capas.forEach(function (capa, indice) {
+      var pos = new Float32Array(capa.cantidad * 3);
+      var colores = new Float32Array(capa.cantidad * 3);
+      for (var i = 0; i < capa.cantidad; i++) {
+        var angulo = Math.random() * 6.28;
+        var radio = Math.sqrt(Math.random()) * capa.radio;
+        pos[i * 3] = Math.cos(angulo) * radio + C.azar(-120, 120);
+        pos[i * 3 + 1] = C.azar(-capa.alto, capa.alto);
+        pos[i * 3 + 2] = Math.sin(angulo) * radio - 260;
+        var brillo = C.azar(0.35, 1);
+        colores[i * 3] = capa.color[0] * brillo;
+        colores[i * 3 + 1] = capa.color[1] * brillo;
+        colores[i * 3 + 2] = capa.color[2] * brillo;
+      }
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(colores, 3));
+      var puntos = new THREE.Points(geo, new THREE.PointsMaterial({
+        map: new THREE.CanvasTexture(C.texturaMota('rgba(255,255,255,.9)', 32)),
+        size: indice === 0 ? 4 : 5.5, sizeAttenuation: true,
+        vertexColors: true, transparent: true,
+        opacity: indice === 0 ? 0.22 : 0.13,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      puntos.userData = { velocidad: 0.0008 + indice * 0.0006 };
+      g.add(puntos);
+    });
+    polvoCosmico = g;
+    return g;
+  }
+
   // -- Estrellas fugaces --
   function construirTexturaEstela() {
     var w = 220, h = 24;
@@ -207,32 +251,369 @@
     return c;
   }
 
-  function lanzarEstrellaFugaz(xNdc, yNdc) {
-    if (fugaces.length > 7) return;
-    var camara = C.escena.camara();
-    var origen;
-    if (typeof xNdc === 'number') {
-      raycaster.setFromCamera({ x: xNdc, y: yNdc }, camara);
-      origen = raycaster.ray.at(C.azar(160, 260), new THREE.Vector3());
-    } else {
-      var theta = Math.random() * Math.PI * 2;
-      origen = new THREE.Vector3(Math.cos(theta) * 300, C.azar(60, 220), Math.sin(theta) * 300);
+  function texturaCometa(colores) {
+    var c = document.createElement('canvas'); c.width = 900; c.height = 64;
+    var ctx = c.getContext('2d');
+    var g = ctx.createLinearGradient(0, 0, 900, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.58, colores[0]);
+    g.addColorStop(0.8, colores[1]);
+    g.addColorStop(0.95, colores[2]);
+    g.addColorStop(1, '#ffffff');
+    ctx.fillStyle = g; ctx.shadowColor = colores[1]; ctx.shadowBlur = 18;
+    ctx.beginPath(); ctx.ellipse(650, 32, 270, 19, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,255,255,.95)';
+    ctx.beginPath(); ctx.arc(760, 32, 10, 0, Math.PI * 2); ctx.fill();
+    return c;
+  }
+
+  function crearPlanetasLejanos() {
+    var g = new THREE.Group();
+    var colores = [0x596dff, 0xff6f9f, 0x42d7c4, 0xffb84f, 0xa579ff, 0x6cb6ff];
+    for (var i = 0; i < 16; i++) {
+      var planeta = crearPlanetaSolido(C.elegir(colores), C.azar(3.5, 8.5));
+      var ang = Math.random() * Math.PI * 2, radio = C.azar(300, 720);
+      planeta.position.set(Math.cos(ang) * radio, C.azar(-130, 180), Math.sin(ang) * radio);
+      planeta.userData = { angulo: ang, radio: radio, velocidad: C.azar(-0.012, 0.012), altura: planeta.position.y };
+      g.add(planeta); cuerposLejanos.push(planeta);
     }
 
-    var direccion = new THREE.Vector3(C.azar(-1, 1), C.azar(-0.6, -0.15), C.azar(-1, 1)).normalize();
-    var largo = C.azar(30, 55);
-    var vel = direccion.clone().multiplyScalar(C.azar(220, 320));
+    for (var j = 0; j < 4; j++) {
+      var sistema = new THREE.Group();
+      var centro = crearPlanetaSolido(C.elegir(colores), C.azar(7, 13));
+      sistema.add(centro);
+      for (var k = 0; k < C.azarEntero(2, 4); k++) {
+        var luna = crearPlanetaSolido(C.elegir(colores), C.azar(2, 4.5));
+        var orbita = C.azar(18, 30), fase = Math.random() * 6.28;
+        luna.userData = { orbita: orbita, fase: fase, velocidad: C.azar(0.18, 0.42) };
+        luna.position.set(Math.cos(fase) * orbita, C.azar(-3, 3), Math.sin(fase) * orbita);
+        sistema.add(luna);
+      }
+      var anguloSistema = Math.random() * 6.28, radioSistema = C.azar(430, 760);
+      sistema.position.set(Math.cos(anguloSistema) * radioSistema, C.azar(-100, 190), Math.sin(anguloSistema) * radioSistema);
+      sistema.userData = { angulo: anguloSistema, radio: radioSistema, velocidad: C.azar(-0.009, 0.009), grupoPlanetario: true };
+      g.add(sistema);
+      cuerposLejanos.push(sistema);
+    }
+    return g;
+  }
 
+  function crearPlanetaSolido(color, radio) {
+    return new THREE.Mesh(
+      new THREE.SphereGeometry(radio, 16, 12),
+      new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.92 })
+    );
+  }
+
+  function crearSupernovas() {
+    var g = new THREE.Group();
+    var mapa = new THREE.CanvasTexture(C.texturaResplandor('rgba(255,255,255,1)', 'rgba(255,90,180,0)', 128));
+    for (var i = 0; i < 6; i++) {
+      var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: mapa, color: i % 2 ? 0xff8bd8 : 0x8bc7ff,
+        transparent: true, opacity: C.azar(0.35, 0.8), depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }));
+      sprite.scale.setScalar(C.azar(12, 26));
+      sprite.position.set(C.azar(-520, 520), C.azar(-160, 260), C.azar(-700, -300));
+      sprite.userData = { fase: Math.random() * 6.28, base: sprite.scale.x };
+      g.add(sprite); cuerposLejanos.push(sprite);
+    }
+
+    var corazon = new THREE.Shape();
+    corazon.moveTo(0, 4); corazon.bezierCurveTo(-18, -8, -13, -20, 0, -10);
+    corazon.bezierCurveTo(13, -20, 18, -8, 0, 4);
+    var puntos = corazon.getPoints(40).map(function (p) {
+      return new THREE.Vector3(p.x, p.y, 0);
+    });
+    var linea = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(puntos),
+      new THREE.LineBasicMaterial({ color: 0xff6fae, transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending })
+    );
+    linea.position.set(360, 150, -630); linea.scale.setScalar(1.7);
+    g.add(linea);
+
+    for (var j = 0; j < 3; j++) {
+      var explosion = new THREE.Group();
+      var centro = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: mapa, color: 0xffb36b, transparent: true, opacity: 0.7,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      var escalaExplosion = C.azar(0.65, 1.8);
+      centro.scale.setScalar(18 * escalaExplosion);
+      explosion.add(centro);
+      for (var k = 0; k < 7; k++) {
+        var rayo = new THREE.Mesh(
+          new THREE.TorusGeometry(C.azar(10, 19), 0.55, 6, 24),
+          new THREE.MeshBasicMaterial({ color: k % 2 ? 0xff6d9e : 0xffd36b, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending })
+        );
+        rayo.rotation.x = C.azar(-0.7, 0.7); rayo.rotation.z = Math.random() * 6.28;
+        rayo.scale.setScalar(C.azar(0.7, 1.4));
+        explosion.add(rayo);
+      }
+      explosion.position.set(C.azar(-500, 500), C.azar(-120, 170), C.azar(-720, -420));
+      explosion.userData = {
+        fase: Math.random() * 6.28,
+        base: escalaExplosion,
+        brillo: C.azar(0.75, 1.35),
+      };
+      g.add(explosion); cuerposLejanos.push(explosion);
+    }
+    return g;
+  }
+
+  function crearFuegosArtificiales() {
+    var g = new THREE.Group();
+    var paleta = [0xff79b7, 0xffcf68, 0x7ee8ff, 0xb68cff, 0x8dffc9];
+    for (var i = 0; i < 5; i++) {
+      var estallido = new THREE.Group();
+      var posiciones = [];
+      for (var j = 0; j < 18; j++) {
+        var angulo = (Math.PI * 2 * j) / 18;
+        var radio = C.azar(15, 28);
+        posiciones.push(0, 0, 0, Math.cos(angulo) * radio, Math.sin(angulo) * radio, C.azar(-3, 3));
+      }
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
+      var material = new THREE.LineBasicMaterial({
+        color: C.elegir(paleta), transparent: true, opacity: 0.78,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      estallido.add(new THREE.LineSegments(geo, material));
+      var resplandor = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(C.texturaResplandor('rgba(255,255,255,1)', 'rgba(255,100,180,0)', 96)),
+        color: C.elegir(paleta), transparent: true, opacity: 0.8,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      resplandor.scale.setScalar(20);
+      estallido.add(resplandor);
+      estallido.position.set(C.azar(-560, 560), C.azar(-150, 230), C.azar(-760, -480));
+      estallido.scale.setScalar(0.05);
+      estallido.userData = {
+        fase: C.azar(0, 6.28),
+        duracion: C.azar(2.8, 5.5),
+        retraso: C.azar(0, 4),
+        tamano: C.azar(0.55, 2.2),
+        brillo: C.azar(0.75, 1.4),
+      };
+      g.add(estallido);
+      fuegos.push(estallido);
+    }
+    return g;
+  }
+
+  function crearAuroras() {
+    var g = new THREE.Group();
+    var colores = [0x8d7bff, 0xff79be, 0x55e5d0];
+    for (var i = 0; i < 3; i++) {
+      var puntos = [];
+      for (var j = 0; j <= 18; j++) {
+        var x = -520 + j * 58;
+        var y = 245 + Math.sin(j * 0.55 + i * 1.7) * 26 + i * 24;
+        puntos.push(new THREE.Vector3(x, y, -640 - i * 22));
+      }
+      var linea = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(puntos),
+        new THREE.LineBasicMaterial({
+          color: colores[i], transparent: true, opacity: 0.1,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        })
+      );
+      linea.userData = { fase: i * 1.8 };
+      g.add(linea);
+      auroras.push(linea);
+    }
+    return g;
+  }
+
+  function crearGalaxiasNebulosas() {
+    var g = new THREE.Group();
+    var colores = [0xff6fb5, 0x8b7dff, 0x59d9e8, 0xffb85c, 0xb77dff];
+    for (var i = 0; i < 8; i++) {
+      var galaxia = new THREE.Group();
+      var color = C.elegir(colores);
+      var halo = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(C.texturaResplandor('rgba(255,255,255,.72)', 'rgba(100,80,255,0)', 128)),
+        color: color, transparent: true, opacity: C.azar(0.12, 0.3),
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      halo.scale.setScalar(C.azar(34, 72));
+      galaxia.add(halo);
+      var puntos = [];
+      for (var j = 0; j < 80; j++) {
+        var angulo = j * 0.42;
+        var radio = 2 + j * 0.48;
+        puntos.push(new THREE.Vector3(
+          Math.cos(angulo) * radio,
+          Math.sin(angulo) * radio * 0.42,
+          Math.sin(j * 0.7) * 2
+        ));
+      }
+      var espiral = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(puntos),
+        new THREE.LineBasicMaterial({
+          color: color, transparent: true, opacity: C.azar(0.3, 0.7),
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        })
+      );
+      espiral.scale.setScalar(C.azar(1.2, 2.4));
+      espiral.rotation.z = C.azar(-0.5, 0.5);
+      galaxia.add(espiral);
+      galaxia.position.set(C.azar(-650, 650), C.azar(-220, 300), C.azar(-920, -520));
+      galaxia.rotation.z = Math.random() * 6.28;
+      galaxia.userData = { fase: Math.random() * 6.28, base: galaxia.scale.x };
+      g.add(galaxia);
+      fondos.push(galaxia);
+    }
+
+    for (var k = 0; k < 7; k++) {
+      var nube = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(C.texturaResplandor('rgba(255,190,240,.22)', 'rgba(50,130,255,0)', 256)),
+        color: C.elegir(colores), transparent: true, opacity: C.azar(0.08, 0.2),
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      nube.scale.set(C.azar(130, 260), C.azar(50, 120), 1);
+      nube.position.set(C.azar(-700, 700), C.azar(-260, 280), C.azar(-980, -580));
+      nube.material.rotation = C.azar(-0.6, 0.6);
+      g.add(nube);
+      fondos.push(nube);
+    }
+    return g;
+  }
+
+  function crearDetallesCosmicos() {
+    var g = new THREE.Group();
+    var colores = [0xffd58a, 0x9bdcff, 0xffa8d7, 0xbba7ff];
+
+    for (var i = 0; i < 6; i++) {
+      var n = 35 + C.azarEntero(0, 25);
+      var posiciones = new Float32Array(n * 3);
+      for (var j = 0; j < n; j++) {
+        var angulo = Math.random() * 6.28;
+        var radio = Math.sqrt(Math.random()) * C.azar(18, 42);
+        posiciones[j * 3] = Math.cos(angulo) * radio;
+        posiciones[j * 3 + 1] = Math.sin(angulo) * radio * 0.55;
+        posiciones[j * 3 + 2] = C.azar(-6, 6);
+      }
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(posiciones, 3));
+      var cluster = new THREE.Points(geo, new THREE.PointsMaterial({
+        color: C.elegir(colores), size: C.azar(1.2, 2.4),
+        transparent: true, opacity: C.azar(0.28, 0.65),
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      cluster.position.set(C.azar(-700, 700), C.azar(-240, 280), C.azar(-1000, -560));
+      cluster.rotation.z = Math.random() * 6.28;
+      cluster.userData = { fase: Math.random() * 6.28, velocidad: C.azar(-0.012, 0.012) };
+      g.add(cluster);
+      detalles.push(cluster);
+    }
+
+    for (var k = 0; k < 12; k++) {
+      var chispa = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: mapaDestello, color: C.elegir(colores),
+        transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }));
+      chispa.scale.setScalar(C.azar(2.5, 5.5));
+      chispa.position.set(C.azar(-620, 620), C.azar(-180, 240), C.azar(-850, -390));
+      chispa.userData = { fase: Math.random() * 6.28, ritmo: C.azar(0.7, 1.8), base: chispa.material.opacity };
+      g.add(chispa);
+      detalles.push(chispa);
+    }
+
+    for (var m = 0; m < 4; m++) {
+      var sendero = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-90, 0, 0),
+          new THREE.Vector3(-30, 3, 2),
+          new THREE.Vector3(30, -2, -1),
+          new THREE.Vector3(90, 0, 0),
+        ]),
+        new THREE.LineBasicMaterial({
+          color: C.elegir(colores), transparent: true, opacity: 0.15,
+          depthWrite: false, blending: THREE.AdditiveBlending,
+        })
+      );
+      sendero.position.set(C.azar(-650, 650), C.azar(-180, 260), C.azar(-900, -500));
+      sendero.rotation.set(C.azar(-0.5, 0.5), C.azar(-0.5, 0.5), Math.random() * 6.28);
+      sendero.scale.setScalar(C.azar(0.8, 1.8));
+      sendero.userData = { fase: Math.random() * 6.28 };
+      g.add(sendero);
+      detalles.push(sendero);
+    }
+    return g;
+  }
+
+  function lanzarEstrellaFugaz(xNdc, yNdc) {
+    if (fugaces.length > 10) {
+      var antigua = fugaces.shift();
+      grupo.remove(antigua.sprite);
+      grupo.remove(antigua.brillo);
+      antigua.sprite.material.dispose();
+      antigua.brillo.material.dispose();
+    }
+    var camara = C.escena.camara();
+    var frente = camara.getWorldDirection(new THREE.Vector3());
+    var profundidad = C.elegir([125, 265, 430]);
+    var centro = camara.position.clone().add(frente.clone().multiplyScalar(profundidad));
+    var derecha = new THREE.Vector3().setFromMatrixColumn(camara.matrixWorld, 0);
+    var arriba = new THREE.Vector3().setFromMatrixColumn(camara.matrixWorld, 1);
+    var variacion = C.azar(-24, 24);
+    var nivel = C.azar(-105, 105);
+    var profundidadVariable = C.azar(-24, 24);
+    var origen = centro.clone()
+      .addScaledVector(derecha, -620 + variacion)
+      .addScaledVector(arriba, nivel)
+      .addScaledVector(frente, profundidadVariable);
+    var destino = centro.clone()
+      .addScaledVector(derecha, 620 + variacion)
+      .addScaledVector(arriba, nivel)
+      .addScaledVector(frente, profundidadVariable);
+    var direccion = destino.clone().sub(origen).normalize();
+    var distancia = origen.distanceTo(destino);
+    var vida = C.azar(10, 14);
+    var vel = direccion.clone().multiplyScalar(distancia / vida);
+    var largo = C.azar(95, 135);
+
+    var paletas = [
+      ['rgba(255,99,196,.15)', 'rgba(255,151,214,.75)', 'rgba(255,230,151,.98)'],
+      ['rgba(80,177,255,.15)', 'rgba(115,217,255,.78)', 'rgba(213,164,255,.98)'],
+      ['rgba(80,255,195,.12)', 'rgba(130,255,205,.72)', 'rgba(255,255,255,.98)'],
+      ['rgba(255,71,133,.15)', 'rgba(255,122,139,.78)', 'rgba(255,205,109,.98)'],
+    ];
     var mat = new THREE.SpriteMaterial({
-      map: texturaFugaz, transparent: true, opacity: 0, depthWrite: false,
+      map: new THREE.CanvasTexture(texturaCometa(C.elegir(paletas))), transparent: true, opacity: 0, depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
     var sprite = new THREE.Sprite(mat);
     sprite.scale.set(largo, largo * 0.11, 1);
     sprite.position.copy(origen);
+    sprite.renderOrder = 1;
+    sprite.material.depthTest = true;
     grupo.add(sprite);
 
-    fugaces.push({ sprite: sprite, vel: vel, edad: 0, vida: C.azar(0.9, 1.4), dir: direccion.clone() });
+    var brillo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: mapaDestello,
+      color: C.elegir([0xfff4be, 0xffa8ef, 0x9ee8ff, 0xffffff]),
+      transparent: true, opacity: 0.95, depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    brillo.scale.setScalar(C.azar(9, 14));
+    brillo.position.copy(origen);
+    brillo.renderOrder = 2;
+    brillo.material.depthTest = true;
+    grupo.add(brillo);
+
+    fugaces.push({
+      sprite: sprite,
+      brillo: brillo,
+      vel: vel,
+      edad: 0,
+      vida: vida,
+      dir: direccion.clone(),
+    });
   }
 
   function actualizarFugaces(dt) {
@@ -242,13 +623,18 @@
       var t = f.edad / f.vida;
       if (t >= 1) {
         grupo.remove(f.sprite);
+        grupo.remove(f.brillo);
         f.sprite.material.dispose();
+        f.brillo.material.dispose();
         fugaces.splice(i, 1);
         continue;
       }
       f.sprite.position.addScaledVector(f.vel, dt);
-      var op = t < 0.15 ? t / 0.15 : (t > 0.7 ? (1 - t) / 0.3 : 1);
+      f.brillo.position.copy(f.sprite.position).addScaledVector(f.dir, 18);
+      var op = t < 0.12 ? t / 0.12 : (t > 0.72 ? (1 - t) / 0.28 : 1);
       f.sprite.material.opacity = op;
+      f.brillo.material.opacity = op * 0.95;
+      f.brillo.scale.setScalar((8 + Math.sin(t * 28) * 2) * op);
 
       f.sprite.material.rotation = Math.atan2(f.dir.y, f.dir.x);
     }
@@ -258,16 +644,73 @@
     if (estrellas) estrellas.material.uniforms.tiempo.value = t;
     if (constelaciones) constelaciones.children[1].material.uniforms.tiempo.value = t;
     if (!reducido) grupo.rotation.y += dt * 0.0025;
+    cuerposLejanos.forEach(function (cuerpo) {
+      if (cuerpo.userData && cuerpo.userData.radio) {
+        cuerpo.userData.angulo += dt * cuerpo.userData.velocidad;
+        cuerpo.position.x = Math.cos(cuerpo.userData.angulo) * cuerpo.userData.radio;
+        cuerpo.position.z = Math.sin(cuerpo.userData.angulo) * cuerpo.userData.radio;
+        if (cuerpo.userData.grupoPlanetario) {
+          cuerpo.children.forEach(function (planeta) {
+            if (!planeta.userData || !planeta.userData.orbita) return;
+            planeta.userData.fase += dt * planeta.userData.velocidad;
+            planeta.position.x = Math.cos(planeta.userData.fase) * planeta.userData.orbita;
+            planeta.position.z = Math.sin(planeta.userData.fase) * planeta.userData.orbita;
+          });
+        }
+      } else if (cuerpo.userData && cuerpo.userData.fase !== undefined) {
+        var pulso = 1 + Math.sin(t * 2 + cuerpo.userData.fase) * 0.18;
+        cuerpo.scale.setScalar(cuerpo.userData.base * pulso);
+        if (cuerpo.material) {
+              cuerpo.material.opacity = 0.45 + Math.sin(t * 2 + cuerpo.userData.fase) * 0.25;
+        } else {
+          cuerpo.rotation.z += dt * 0.35;
+        }
+      }
+    });
+    fuegos.forEach(function (fuego) {
+      var ciclo = (t + fuego.userData.fase) % fuego.userData.duracion;
+      var progreso = (ciclo - fuego.userData.retraso) / (fuego.userData.duracion - fuego.userData.retraso);
+      if (progreso < 0 || progreso > 1) {
+        fuego.scale.setScalar(0.05);
+        fuego.children[0].material.opacity = 0;
+        return;
+      }
+      var visible = progreso < 0.18 ? progreso / 0.18 : 1 - (progreso - 0.18) / 0.82;
+      var crecimiento = 0.05 + Math.max(0, progreso) * fuego.userData.tamano;
+      fuego.scale.setScalar(crecimiento);
+      fuego.children[0].material.opacity = Math.max(0, visible) * fuego.userData.brillo;
+      fuego.children[1].material.opacity = Math.max(0, visible) * fuego.userData.brillo * 0.7;
+    });
+    auroras.forEach(function (aurora) {
+      aurora.material.opacity = 0.07 + Math.sin(t * 0.35 + aurora.userData.fase) * 0.035;
+      aurora.position.x = Math.sin(t * 0.12 + aurora.userData.fase) * 16;
+    });
+    fondos.forEach(function (fondo) {
+      if (fondo.userData && fondo.userData.fase !== undefined) {
+        fondo.rotation.z += dt * 0.004;
+        fondo.children[0].material.opacity = 0.18 + Math.sin(t * 0.18 + fondo.userData.fase) * 0.06;
+      }
+    });
+    detalles.forEach(function (detalle) {
+      if (detalle.userData && detalle.userData.velocidad) {
+        detalle.rotation.z += dt * detalle.userData.velocidad;
+        detalle.material.opacity = 0.3 + Math.sin(t * 0.3 + detalle.userData.fase) * 0.16;
+      } else if (detalle.userData && detalle.userData.ritmo) {
+        var brillo = 0.28 + Math.max(0, Math.sin(t * detalle.userData.ritmo + detalle.userData.fase)) * 0.72;
+        detalle.material.opacity = brillo;
+        detalle.scale.setScalar((3.5 + Math.sin(t * 1.3 + detalle.userData.fase) * 0.8) * brillo);
+      } else if (detalle.userData && detalle.userData.fase !== undefined) {
+        detalle.material.opacity = 0.08 + Math.max(0, Math.sin(t * 0.45 + detalle.userData.fase)) * 0.18;
+      }
+    });
+    if (polvoCosmico && !reducido) {
+      polvoCosmico.rotation.y += dt * 0.0015;
+      polvoCosmico.rotation.x = Math.sin(t * 0.08) * 0.025;
+    }
 
     actualizarFugaces(dt);
 
-    if (!reducido) {
-      proximaLluvia -= dt * 1000;
-      if (proximaLluvia <= 0) {
-        lanzarEstrellaFugaz();
-        proximaLluvia = C.azar(C.config.lluviaMinMs, C.config.lluviaMaxMs);
-      }
-    }
+    // Los cometas se reservan para la interacción explícita del visitante.
   }
 
   C.espacio = {
